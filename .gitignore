@@ -6,28 +6,66 @@ Thumbs.db
 *.log
 *.tmp
 *.lock
+*.pid
+*.seed
+*.pid.lock
 
 # Environment files
 .env
 .env.local
 .env.development.local
 .env.production.local
+.env.test.local
 
 # Dependency directories
 node_modules/
 venv/
+__pycache__/
+*.pyc
+*.pyo
 
 # Cache and build artifacts
 .cache/
 build/
 dist/
+.next/
+out/
+
+# Coverage reports
+coverage/
+*.lcov
+coverage-final.json
 
 # Docker files
 *.tar
 *.img
-.env.docker
+.dockerignore
+docker-compose.override.yml
 
 # IDE-specific files
 .idea/
 .vscode/
 *.swp
+
+# Testing files
+jest/
+cypress/screenshots/
+cypress/videos/
+
+# Python packaging
+*.egg-info/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Miscellaneous
+*.bak
+*.orig
+*.rej
+*.sublime-project
+*.sublime-workspace
+
+# Local settings files
+.settings/
+*.iml
+*.ipynb_checkpoints
