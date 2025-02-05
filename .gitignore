@@ -1,0 +1,33 @@
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.lock
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.production.local
+
+# Dependency directories
+node_modules/
+venv/
+
+# Cache and build artifacts
+.cache/
+build/
+dist/
+
+# Docker files
+*.tar
+*.img
+.env.docker
+
+# IDE-specific files
+.idea/
+.vscode/
+*.swp
