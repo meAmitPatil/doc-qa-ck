@@ -1,33 +1,37 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
-from app.utils.pdf_parser import extract_text_from_pdf  # Import the parser
-from app.utils.embeddings import generate_embeddings  # Import the embeddings
-from app.utils.qdrant_client import store_embeddings  # Import the Qdrant storage function
+from app.utils.pdf_parser import extract_text_from_pdf 
+from app.utils.embeddings import generate_embeddings
+from app.utils.qdrant_client import store_embeddings
+import logging
 
 router = APIRouter()
 
-# Path to save uploaded files
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+logging.basicConfig(level=logging.INFO)
 
 @router.post("/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
     uploaded_file_paths = []
+    success_results = []
+    failed_results = []
 
-    # Save the uploaded files
     for file in files:
         if not file.filename.endswith(".pdf"):
             raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}")
         
         file_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        uploaded_file_paths.append(file_path)
-
-    # Parse the uploaded files, generate embeddings, and store in Qdrant
-    parsed_results = []
+        try:
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            uploaded_file_paths.append(file_path)
+            logging.info(f"File saved successfully: {file.filename}")
+        except Exception as e:
+            logging.error(f"Failed to save file {file.filename}: {e}")
+            failed_results.append({"file": file.filename, "error": f"Failed to save: {e}"})
 
     for file_path in uploaded_file_paths:
         try:
@@ -38,27 +42,40 @@ async def upload_files(files: list[UploadFile] = File(...)):
                 if not extracted_text.strip():
                     raise ValueError("No text extracted from the PDF. It may be scanned or corrupted.")
                 
-                # Generate embeddings for the extracted text
+                # Generate embeddings
                 embeddings = generate_embeddings(extracted_text)
                 
-                # Store embeddings in Qdrant
-                metadata = {"filename": os.path.basename(file_path)}  # Add any additional metadata if required
+                # Print embedding details BEFORE storing
+                print(f"\n🔹 Generated Embeddings for '{os.path.basename(file_path)}' (Truncated):")
+                print(f"{embeddings[:5]}... (Length: {len(embeddings)})")  # Print only first 5 values for readability
+
+                metadata = {
+                    "filename": os.path.basename(file_path),
+                    "content": extracted_text
+                }
+                
+                # Store in Qdrant
                 store_embeddings([embeddings], [metadata])
                 
-                parsed_results.append({
+                success_results.append({
                     "file": os.path.basename(file_path),
                     "content": extracted_text,
                     "status": "Successfully stored in Qdrant"
                 })
                 
-                print(f"--- Parsed and Stored Content for {os.path.basename(file_path)} ---")
-                print(extracted_text)
+                logging.info(f"--- Parsed and Stored Content for {os.path.basename(file_path)} ---")
+                logging.info(extracted_text)
+
         except Exception as e:
-            parsed_results.append({
+            failed_results.append({
                 "file": os.path.basename(file_path),
                 "error": f"Processing failed: {e}"
             })
-            print(f"--- Failed to process content for {os.path.basename(file_path)} ---")
-            print(f"Error: {e}")
+            logging.error(f"--- Failed to process content for {os.path.basename(file_path)} ---")
+            logging.error(f"Error: {e}")
 
-    return {"parsed_results": parsed_results}
+
+    return {
+        "success": success_results,
+        "failed": failed_results
+    }

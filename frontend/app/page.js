@@ -6,10 +6,15 @@ import axios from "axios";
 export default function Home() {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [chatHistory, setChatHistory] = useState([]);
+  const [loadingAnswer, setLoadingAnswer] = useState(false);
+  const [isUploaded, setIsUploaded] = useState(false); // Track if files are uploaded
 
   // Handle file selection
   const handleFileChange = (event) => {
     setFiles([...event.target.files]);
+    setIsUploaded(false); // Reset upload status when new files are selected
   };
 
   // Handle file upload
@@ -29,23 +34,21 @@ export default function Home() {
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
-          withCredentials: true, // Ensures cookies are sent with the request
+          withCredentials: true,
         }
       );
       alert("Files uploaded successfully!");
       console.log(response.data);
+      setIsUploaded(true); // Mark upload as successful
     } catch (error) {
-      // Enhanced error handling
+      setIsUploaded(false); // Mark upload as failed
       if (error.response) {
-        // Server responded with a status other than 2xx
         console.error("Response error:", error.response.data);
         alert(`Failed to upload files: ${error.response.data.detail || "Unknown error"}`);
       } else if (error.request) {
-        // Request was made but no response was received
         console.error("Request error:", error.request);
         alert("No response received from the server. Check your backend.");
       } else {
-        // Other errors
         console.error("Error:", error.message);
         alert("An error occurred: " + error.message);
       }
@@ -54,9 +57,43 @@ export default function Home() {
     }
   };
 
+  // Handle asking a question
+  const handleAskQuestion = async () => {
+    if (!isUploaded) {
+      alert("Please upload a document first before asking questions.");
+      return;
+    }
+
+    if (question.trim() === "") {
+      alert("Please enter a question.");
+      return;
+    }
+
+    try {
+      setLoadingAnswer(true);
+      const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
+
+      const answer = response.data.answer;
+
+      // Update chat history with the question and answer
+      setChatHistory((prev) => [
+        ...prev,
+        { type: "question", text: question },
+        { type: "answer", text: answer },
+      ]);
+
+      setQuestion(""); // Clear the input field
+    } catch (error) {
+      console.error("Error fetching answer:", error);
+      alert("An error occurred while fetching the answer.");
+    } finally {
+      setLoadingAnswer(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white shadow-md rounded-lg p-6">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white shadow-md rounded-lg p-6 mb-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">DOC-QA-CK</h1>
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4">
           <label
@@ -77,7 +114,9 @@ export default function Home() {
                 d="M7 16v-4m0 0V7m0 5l-2.5 2.5M7 11h10m4 0H7m10 0l-2.5-2.5m0 0L17 7m0 4v4"
               />
             </svg>
-            <span className="mt-2 text-sm text-gray-600">Drag & drop your PDF files here, or click to select</span>
+            <span className="mt-2 text-sm text-gray-600">
+              Drag & drop your PDF files here, or click to select
+            </span>
             <input
               id="file-upload"
               type="file"
@@ -107,6 +146,49 @@ export default function Home() {
         >
           {uploading ? "Uploading..." : "Upload Files"}
         </button>
+      </div>
+
+      <div className="max-w-2xl w-full bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Ask Questions</h2>
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Type your question here..."
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            disabled={!isUploaded} // Disable input if no file uploaded
+            className={`w-full p-2 border ${
+              isUploaded ? "border-gray-300" : "border-gray-300 bg-gray-100 cursor-not-allowed"
+            } rounded-lg text-black`}
+          />
+        </div>
+        <button
+          onClick={handleAskQuestion}
+          disabled={loadingAnswer || !isUploaded} // Disable button if no file uploaded
+          className={`w-full py-2 px-4 text-white rounded-lg ${
+            loadingAnswer || !isUploaded
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700"
+          }`}
+        >
+          {loadingAnswer ? "Fetching answer..." : "Ask Question"}
+        </button>
+
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Chat History</h3>
+          <div className="space-y-4">
+            {chatHistory.map((entry, index) => (
+              <div
+                key={index}
+                className={`p-4 rounded-lg ${
+                  entry.type === "question" ? "bg-gray-100" : "bg-green-100"
+                }`}
+              >
+                <p className="text-sm text-black">{entry.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
