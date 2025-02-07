@@ -74,12 +74,15 @@ export default function Home() {
       const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
 
       const answer = response.data.answer;
+      const sources = response.data.sources;
+      const limitedSources = sources.slice(0, 3);
 
-      // Update chat history with the question and answer
+      // Update chat history with the question, answer, and limited sources
       setChatHistory((prev) => [
         ...prev,
         { type: "question", text: question },
         { type: "answer", text: answer },
+        { type: "sources", text: limitedSources },
       ]);
 
       setQuestion(""); // Clear the input field
@@ -178,13 +181,38 @@ export default function Home() {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Chat History</h3>
           <div className="space-y-4">
             {chatHistory.map((entry, index) => (
-              <div
-                key={index}
-                className={`p-4 rounded-lg ${
-                  entry.type === "question" ? "bg-gray-100" : "bg-green-100"
-                }`}
-              >
-                <p className="text-sm text-black">{entry.text}</p>
+              <div key={index} className="p-4 rounded-lg shadow-md bg-white">
+                {entry.type === "question" && (
+                  <div className="font-bold text-blue-600">
+                    Q: {entry.text}
+                  </div>
+                )}
+                {entry.type === "answer" && (
+                  <div className="text-gray-800">
+                    A: {entry.text}
+                  </div>
+                )}
+                {entry.type === "sources" && (
+                  <div className="text-gray-600">
+                    Sources:
+                    <ul className="list-disc pl-5">
+                      {Array.isArray(entry.text) ? (
+                        entry.text.map((source, idx) => (
+                          <li key={idx}>
+                            <strong>{source.payload.filename}</strong>: 
+                            {source.payload.content ? 
+                              source.payload.content.substring(0, 300) + "..." : 
+                              source.payload.text ? 
+                                source.payload.text.substring(0, 300) + "..." : 
+                                "Content not available."}
+                          </li>
+                        ))
+                      ) : (
+                        <li>No sources available.</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>
