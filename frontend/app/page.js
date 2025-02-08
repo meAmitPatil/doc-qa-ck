@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 export default function Home() {
@@ -10,6 +10,12 @@ export default function Home() {
   const [chatHistory, setChatHistory] = useState([]);
   const [loadingAnswer, setLoadingAnswer] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false); // Track if files are uploaded
+
+  useEffect(() => {
+    axios.get("http://127.0.0.1:8000/clear-qdrant")
+      .then(() => console.log("🗑️ Cleared Qdrant on refresh"))
+      .catch((error) => console.error("❌ Error clearing Qdrant:", error));
+  }, []);
 
   // Handle file selection
   const handleFileChange = (event) => {
@@ -74,15 +80,16 @@ export default function Home() {
       const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
 
       const answer = response.data.answer;
-      const sources = response.data.sources;
-      const limitedSources = sources.slice(0, 3);
+      const sources = response.data.sources || []; // Ensure sources is always an array
 
-      // Update chat history with the question, answer, and limited sources
+      // Only include sources if Qdrant was used
+      const hasSources = sources.length > 0;
+
       setChatHistory((prev) => [
         ...prev,
         { type: "question", text: question },
         { type: "answer", text: answer },
-        { type: "sources", text: limitedSources },
+        ...(hasSources ? [{ type: "sources", text: sources }] : []), // ✅ Only add if sources exist
       ]);
 
       setQuestion(""); // Clear the input field
@@ -159,7 +166,7 @@ export default function Home() {
             placeholder="Type your question here..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            disabled={!isUploaded} // Disable input if no file uploaded
+            disabled={!isUploaded}
             className={`w-full p-2 border ${
               isUploaded ? "border-gray-300" : "border-gray-300 bg-gray-100 cursor-not-allowed"
             } rounded-lg text-black`}
@@ -167,7 +174,7 @@ export default function Home() {
         </div>
         <button
           onClick={handleAskQuestion}
-          disabled={loadingAnswer || !isUploaded} // Disable button if no file uploaded
+          disabled={loadingAnswer || !isUploaded}
           className={`w-full py-2 px-4 text-white rounded-lg ${
             loadingAnswer || !isUploaded
               ? "bg-gray-400 cursor-not-allowed"
@@ -192,24 +199,15 @@ export default function Home() {
                     A: {entry.text}
                   </div>
                 )}
-                {entry.type === "sources" && (
+                {entry.type === "sources" && entry.text.length > 0 && (
                   <div className="text-gray-600">
-                    Sources:
+                    <strong>Sources:</strong>
                     <ul className="list-disc pl-5">
-                      {Array.isArray(entry.text) ? (
-                        entry.text.map((source, idx) => (
-                          <li key={idx}>
-                            <strong>{source.payload.filename}</strong>: 
-                            {source.payload.content ? 
-                              source.payload.content.substring(0, 300) + "..." : 
-                              source.payload.text ? 
-                                source.payload.text.substring(0, 300) + "..." : 
-                                "Content not available."}
-                          </li>
-                        ))
-                      ) : (
-                        <li>No sources available.</li>
-                      )}
+                      {entry.text.map((source, idx) => (
+                        <li key={idx}>
+                          <strong>{source.filename}</strong>: {source.content?.substring(0, 100) || "Content not available."}...
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}

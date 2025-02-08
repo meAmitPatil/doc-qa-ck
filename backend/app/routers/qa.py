@@ -35,25 +35,29 @@ async def answer_question(request: QuestionRequest):
 
         logger.info(f"🔢 Generated question embedding: {question_embedding[:10]}...")  # Print first 10 values
 
-        # Step 2: Query Qdrant for the most relevant documents
-        top_k = 5  # Increase this value if needed
-        results = search_embeddings(query_vector=question_embedding, top_k=top_k)
+        # Step 2: Query Qdrant for the most relevant documents (using a threshold)
+        top_k = 5  # Number of results to fetch
+        relevance_threshold = 0.7  # Set the minimum similarity score
+        results = search_embeddings(query_vector=question_embedding, top_k=top_k, threshold=relevance_threshold)
 
         logger.info(f"🔍 Qdrant returned {len(results)} results.")
-        for i, res in enumerate(results):
-            logger.info(f"📌 Document {i+1} Payload: {res['payload']}")  # Log full payload
 
-        # Step 3: Extract content (detect correct key dynamically)
+        # If no relevant results, fallback to OpenAI without sources
+        if not results:
+            logger.info("🚫 No relevant documents found. Answering generically.")
+            answer = generate_answer(question, context=None)
+            return {
+                "question": question,
+                "answer": answer
+            }  # ❌ Omit "sources" entirely when no Qdrant data is used
+
+        # Step 3: Extract content from relevant results
         context = "\n".join([
-            res["payload"].get("text", res["payload"].get("content", ""))  # Try "text" first, fallback to "content"
+            res["payload"].get("text", res["payload"].get("content", ""))  
             for res in results
         ])
 
         logger.info(f"📌 Extracted Context (length: {len(context)} chars): {context[:200]}...")  # Print first 200 chars
-
-        if not context.strip():
-            logger.warning("⚠️ No relevant context found in Qdrant. Check if 'text' or 'content' is the correct key.")
-            raise HTTPException(status_code=404, detail="No relevant context found in the database.")
 
         # Step 4: Generate an answer using OpenAI API
         answer = generate_answer(question, context)
@@ -64,15 +68,17 @@ async def answer_question(request: QuestionRequest):
 
         logger.info(f"✅ Generated answer: {answer[:100]}...")  # Print first 100 chars
 
-        # Prepare the response
-        response = {
+        # Step 5: Prepare the response with filtered sources
+        response_sources = [{"filename": res["payload"].get("filename", "Unknown")} for res in results]
+
+        # Limit to 1-3 sources
+        response_sources = response_sources[:3] if len(response_sources) > 3 else response_sources
+
+        return {
             "question": question,
             "answer": answer,
-            "context": context,
-            "sources": results  # Include the sources in the response
+            "sources": response_sources  # ✅ Only include sources when Qdrant was used
         }
-
-        return response
 
     except HTTPException as e:
         logger.error(f"🚨 HTTP Exception: {e.detail}")
@@ -81,3 +87,4 @@ async def answer_question(request: QuestionRequest):
     except Exception as e:
         logger.exception(f"🚨 Unexpected error in /qa: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+

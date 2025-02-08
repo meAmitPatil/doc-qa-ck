@@ -58,24 +58,39 @@ def store_embeddings(embeddings: list, payloads: list):
     except Exception as e:
         logger.error(f"Error storing embeddings in Qdrant: {e}")
 
-def search_embeddings(query_vector, top_k: int):
-    """Search Qdrant for the most relevant embeddings."""
+def search_embeddings(query_vector, top_k: int, threshold: float = 0.7):
+    """Search Qdrant for the most relevant embeddings with a confidence threshold."""
     try:
         if not query_vector:
             logger.warning("⚠️ Query vector is empty. Cannot perform search.")
             return []
         
         logger.info(f"🔍 Searching Qdrant for top {top_k} matches...")
-        
-        results = qdrant_client.search(collection_name=COLLECTION_NAME, query_vector=query_vector, limit=top_k)
+
+        # Perform vector search
+        results = qdrant_client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            limit=top_k
+        )
 
         if not results:
             logger.warning("⚠️ No matching results found in Qdrant.")
             return []
         
-        logger.info(f"✅ Found {len(results)} matching documents.")
-        return [{"score": res.score, "payload": res.payload} for res in results]
-    
+        # **Filter results based on threshold score**
+        filtered_results = [
+            {"score": res.score, "payload": res.payload} for res in results if res.score >= threshold
+        ]
+
+        if not filtered_results:
+            logger.info("🚫 No documents met the relevance threshold.")
+            return []  # Return an empty list if nothing is relevant
+
+        logger.info(f"✅ Found {len(filtered_results)} highly relevant documents.")
+        return filtered_results
+
     except Exception as e:
-        logger.error(f"Error searching embeddings in Qdrant: {e}")
+        logger.error(f"❌ Error searching embeddings in Qdrant: {e}")
         return []
+
