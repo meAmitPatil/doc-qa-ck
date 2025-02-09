@@ -9,21 +9,20 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [loadingAnswer, setLoadingAnswer] = useState(false);
-  const [isUploaded, setIsUploaded] = useState(false); // Track if files are uploaded
+  const [isUploaded, setIsUploaded] = useState(false);
 
   useEffect(() => {
-    axios.get("http://127.0.0.1:8000/clear-qdrant")
+    axios
+      .get("http://127.0.0.1:8000/clear-qdrant")
       .then(() => console.log("🗑️ Cleared Qdrant on refresh"))
       .catch((error) => console.error("❌ Error clearing Qdrant:", error));
   }, []);
 
-  // Handle file selection
   const handleFileChange = (event) => {
     setFiles([...event.target.files]);
-    setIsUploaded(false); // Reset upload status when new files are selected
+    setIsUploaded(false);
   };
 
-  // Handle file upload
   const handleUpload = async () => {
     if (files.length === 0) {
       alert("Please select files to upload!");
@@ -45,25 +44,16 @@ export default function Home() {
       );
       alert("Files uploaded successfully!");
       console.log(response.data);
-      setIsUploaded(true); // Mark upload as successful
+      setIsUploaded(true);
     } catch (error) {
-      setIsUploaded(false); // Mark upload as failed
-      if (error.response) {
-        console.error("Response error:", error.response.data);
-        alert(`Failed to upload files: ${error.response.data.detail || "Unknown error"}`);
-      } else if (error.request) {
-        console.error("Request error:", error.request);
-        alert("No response received from the server. Check your backend.");
-      } else {
-        console.error("Error:", error.message);
-        alert("An error occurred: " + error.message);
-      }
+      setIsUploaded(false);
+      console.error("Error uploading files:", error);
+      alert("Failed to upload files. Please try again.");
     } finally {
       setUploading(false);
     }
   };
 
-  // Handle asking a question
   const handleAskQuestion = async () => {
     if (!isUploaded) {
       alert("Please upload a document first before asking questions.");
@@ -80,19 +70,28 @@ export default function Home() {
       const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
 
       const answer = response.data.answer;
-      const sources = response.data.sources || []; // Ensure sources is always an array
+      const sources = response.data.sources || [];
 
-      // Only include sources if Qdrant was used
       const hasSources = sources.length > 0;
 
       setChatHistory((prev) => [
         ...prev,
         { type: "question", text: question },
         { type: "answer", text: answer },
-        ...(hasSources ? [{ type: "sources", text: sources }] : []), // ✅ Only add if sources exist
+        ...(hasSources
+          ? [
+              {
+                type: "sources",
+                text: sources.map(
+                  (source) =>
+                    `${source.filename}: ${source.content?.substring(0, 150) || "Content not available"}...`
+                ),
+              },
+            ]
+          : []),
       ]);
 
-      setQuestion(""); // Clear the input field
+      setQuestion("");
     } catch (error) {
       console.error("Error fetching answer:", error);
       alert("An error occurred while fetching the answer.");
@@ -102,8 +101,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white shadow-md rounded-lg p-6 mb-6">
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6 mb-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">DOC-QA-CK</h1>
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4">
           <label
@@ -158,7 +157,7 @@ export default function Home() {
         </button>
       </div>
 
-      <div className="max-w-2xl w-full bg-white shadow-md rounded-lg p-6">
+      <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Ask Questions</h2>
         <div className="mb-4">
           <input
@@ -188,29 +187,31 @@ export default function Home() {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Chat History</h3>
           <div className="space-y-4">
             {chatHistory.map((entry, index) => (
-              <div key={index} className="p-4 rounded-lg shadow-md bg-white">
-                {entry.type === "question" && (
-                  <div className="font-bold text-blue-600">
-                    Q: {entry.text}
-                  </div>
-                )}
-                {entry.type === "answer" && (
-                  <div className="text-gray-800">
-                    A: {entry.text}
-                  </div>
-                )}
-                {entry.type === "sources" && entry.text.length > 0 && (
-                  <div className="text-gray-600">
-                    <strong>Sources:</strong>
-                    <ul className="list-disc pl-5">
-                      {entry.text.map((source, idx) => (
-                        <li key={idx}>
-                          <strong>{source.filename}</strong>: {source.content?.substring(0, 100) || "Content not available."}...
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+              <div
+                key={index}
+                className={`flex ${
+                  entry.type === "question" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`p-4 rounded-lg shadow-md ${
+                    entry.type === "question" ? "bg-blue-200 text-black" : "bg-gray-200 text-black"
+                  }`}
+                >
+                  {entry.type === "question" && <strong>Q:</strong>}{" "}
+                  {entry.type === "answer" && <strong>A:</strong>}{" "}
+                  {entry.type !== "sources" && entry.text}
+                  {entry.type === "sources" && (
+                    <div className="mt-2">
+                      <h4 className="font-bold text-gray-800">Sources:</h4>
+                      <ol className="mt-2 list-decimal pl-5 text-sm">
+                        {entry.text.map((source, idx) => (
+                          <li key={idx}>{source}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
