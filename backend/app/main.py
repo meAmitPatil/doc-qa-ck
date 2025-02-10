@@ -13,7 +13,10 @@ app = FastAPI()
 # Add CORS middleware to handle requests from the frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Replace with your production frontend URL
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://doc-qa-ck.onrender.com"
+    ],  # Replace with your production frontend URL
     allow_credentials=True,  # Allow cookies to be included in requests
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
     allow_headers=["*"],  # Allow all headers
