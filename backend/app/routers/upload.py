@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
 import logging
+from textwrap import wrap
 from app.utils.embeddings import generate_embeddings
 from app.utils.qdrant_client import store_embeddings
 from app.utils.llama_parse import parse_pdf_with_llama  # Import async function
@@ -12,12 +13,17 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO)
 
+def chunk_text(text, chunk_size=1000):
+    """Splits text into manageable chunks."""
+    return wrap(text, width=chunk_size)
+
 @router.post("/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
     uploaded_file_paths = []
     success_results = []
     failed_results = []
 
+    # Save files locally
     for file in files:
         if not file.filename.endswith(".pdf"):
             raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}")
@@ -33,31 +39,36 @@ async def upload_files(files: list[UploadFile] = File(...)):
             logging.error(f"Failed to save file {file.filename}: {e}")
             failed_results.append({"file": file.filename, "error": f"Failed to save: {e}"})
 
+    # Process each file
     for file_path in uploaded_file_paths:
         try:
             extracted_text = await parse_pdf_with_llama(file_path)  # ✅ Await async parsing
 
+            if isinstance(extracted_text, list):
+                extracted_text = "\n".join(extracted_text)
+
             if not extracted_text.strip():
                 raise ValueError("No text extracted from the PDF. It may be scanned or corrupted.")
 
-            # Generate embeddings
-            embeddings = generate_embeddings(extracted_text)
+            # Chunk text and generate embeddings
+            text_chunks = chunk_text(extracted_text)
+            embeddings = [generate_embeddings(chunk) for chunk in text_chunks]
 
-            metadata = {
-                "filename": os.path.basename(file_path),
-                "content": extracted_text
-            }
-
-            # Store in Qdrant
-            store_embeddings([embeddings], [metadata])
+            # Store chunks in Qdrant
+            for chunk, embedding in zip(text_chunks, embeddings):
+                metadata = {
+                    "filename": os.path.basename(file_path),
+                    "content": chunk
+                }
+                store_embeddings([embedding], [metadata])
 
             success_results.append({
                 "file": os.path.basename(file_path),
-                "content": extracted_text,
-                "status": "Successfully stored in Qdrant"
+                "status": "Successfully processed and stored in Qdrant"
             })
 
             logging.info(f"--- Parsed and Stored Content for {os.path.basename(file_path)} ---")
+
         except Exception as e:
             failed_results.append({
                 "file": os.path.basename(file_path),

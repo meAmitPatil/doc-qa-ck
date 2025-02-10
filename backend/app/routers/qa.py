@@ -27,29 +27,20 @@ async def answer_question(request: QuestionRequest):
 
         logger.info(f"✅ Received question: {question}")
 
-        # Step 1: Query Qdrant for combined context
-        top_k = 5  # Number of results to fetch
-        combined_results = search_embeddings(query_vector=[], top_k=top_k, threshold=0)  # Get combined context
-        combined_context = "\n".join([
-            res["payload"].get("text", res["payload"].get("content", "")) for res in combined_results
-        ])
+        # Step 1: Classify the query as general or context-specific
+        classification = classify_query(question, context="")  # Context not required for classification
+        logger.info(f"📊 Query Classification: {classification}")
 
-        logger.info(f"📋 Combined context length: {len(combined_context)} characters")
-
-        # Step 2: Classify the query as general knowledge or context-specific
-        classification = classify_query(question, combined_context)
-        logger.info(f"🔍 Query classified as: {classification}")
-
-        if classification == "General Knowledge":
-            logger.info("🔍 General knowledge question detected. Skipping Qdrant query.")
+        if classification.lower() == "general knowledge":
+            logger.info("📚 General knowledge query. No Qdrant search required.")
             answer = generate_answer(question, context=None)
             return {
                 "question": question,
                 "answer": answer,
-                "sources": []  # No sources for general queries
+                "sources": []  # No sources for general knowledge
             }
 
-        # Step 3: Generate embeddings for the question
+        # Step 2: Generate embeddings for the question (for context-specific queries)
         question_embedding = generate_embeddings(question)
         if not question_embedding:
             logger.error("❌ Failed to generate embeddings for the question")
@@ -57,11 +48,10 @@ async def answer_question(request: QuestionRequest):
 
         logger.info(f"🔢 Generated question embedding: {question_embedding[:10]}...")
 
-        # Step 4: Query Qdrant for the most relevant documents
+        # Step 3: Query Qdrant for the most relevant documents
+        top_k = 5  # Number of results to fetch
         relevance_threshold = 0.7  # Set the minimum similarity score
         results = search_embeddings(query_vector=question_embedding, top_k=top_k, threshold=relevance_threshold)
-
-        logger.info(f"🔍 Qdrant returned {len(results)} results.")
 
         if not results:
             logger.info("🚫 No relevant documents found. Answering generically.")
@@ -69,18 +59,19 @@ async def answer_question(request: QuestionRequest):
             return {
                 "question": question,
                 "answer": answer,
-                "sources": []
+                "sources": ["No relevant sources found."]
             }
 
-        # Step 5: Extract content from relevant results
-        context = "\n".join([
-            res["payload"].get("text", res["payload"].get("content", ""))  
+        # Step 4: Extract content and metadata from relevant results
+        context = "\n".join([res["content"] for res in results])
+        response_sources = [
+            {"filename": res["filename"], "content": res["content"][:150]}
             for res in results
-        ])
+        ]
 
         logger.info(f"📌 Extracted Context (length: {len(context)} chars): {context[:200]}...")
 
-        # Step 6: Generate an answer using OpenAI API
+        # Step 5: Generate an answer using OpenAI API
         answer = generate_answer(question, context)
         if not answer.strip():
             logger.error("❌ OpenAI returned an empty response")
@@ -88,16 +79,7 @@ async def answer_question(request: QuestionRequest):
 
         logger.info(f"✅ Generated answer: {answer[:100]}...")
 
-        # Step 7: Prepare the response with sources
-        response_sources = [
-            {
-                "filename": res["payload"].get("filename", "Unknown"),
-                "content": res["payload"].get("text", res["payload"].get("content", "Content not available"))
-            }
-            for res in results
-        ]
-        response_sources = response_sources[:3] if len(response_sources) > 3 else response_sources
-
+        # Step 6: Return the answer and sources
         return {
             "question": question,
             "answer": answer,

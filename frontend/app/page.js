@@ -11,6 +11,7 @@ export default function Home() {
   const [loadingAnswer, setLoadingAnswer] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
 
+  // Clear Qdrant on component mount
   useEffect(() => {
     axios
       .get("http://127.0.0.1:8000/clear-qdrant")
@@ -18,11 +19,13 @@ export default function Home() {
       .catch((error) => console.error("❌ Error clearing Qdrant:", error));
   }, []);
 
+  // Handle file selection
   const handleFileChange = (event) => {
     setFiles([...event.target.files]);
     setIsUploaded(false);
   };
 
+  // Upload files to the backend
   const handleUpload = async () => {
     if (files.length === 0) {
       alert("Please select files to upload!");
@@ -39,21 +42,21 @@ export default function Home() {
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
-          withCredentials: true,
         }
       );
+      console.log("Upload Response:", response.data);
       alert("Files uploaded successfully!");
-      console.log(response.data);
       setIsUploaded(true);
     } catch (error) {
-      setIsUploaded(false);
-      console.error("Error uploading files:", error);
+      console.error("Error uploading files:", error.response || error.message);
       alert("Failed to upload files. Please try again.");
+      setIsUploaded(false);
     } finally {
       setUploading(false);
     }
   };
 
+  // Ask a question and fetch the answer from the backend
   const handleAskQuestion = async () => {
     if (!isUploaded) {
       alert("Please upload a document first before asking questions.");
@@ -67,24 +70,28 @@ export default function Home() {
 
     try {
       setLoadingAnswer(true);
+
       const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
+      console.log("Backend Response:", response.data);
 
       const answer = response.data.answer;
       const sources = response.data.sources || [];
-
-      const hasSources = sources.length > 0;
 
       setChatHistory((prev) => [
         ...prev,
         { type: "question", text: question },
         { type: "answer", text: answer },
-        ...(hasSources
+        ...(sources.length > 0
           ? [
               {
                 type: "sources",
                 text: sources.map(
                   (source) =>
-                    `${source.filename}: ${source.content?.substring(0, 150) || "Content not available"}...`
+                    `${source.filename}: ${
+                      source.content
+                        ? source.content.substring(0, 150) + "..."
+                        : "No content available"
+                    }`
                 ),
               },
             ]
@@ -93,127 +100,177 @@ export default function Home() {
 
       setQuestion("");
     } catch (error) {
-      console.error("Error fetching answer:", error);
-      alert("An error occurred while fetching the answer.");
+      console.error("Error fetching answer:", error.response || error.message);
+      alert("An error occurred while fetching the answer. Please try again.");
     } finally {
       setLoadingAnswer(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">DOC-QA-CK</h1>
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4">
-          <label
-            htmlFor="file-upload"
-            className="flex flex-col items-center justify-center cursor-pointer"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-12 w-12 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M7 16v-4m0 0V7m0 5l-2.5 2.5M7 11h10m4 0H7m10 0l-2.5-2.5m0 0L17 7m0 4v4"
-              />
-            </svg>
-            <span className="mt-2 text-sm text-gray-600">
-              Drag & drop your PDF files here, or click to select
-            </span>
-            <input
-              id="file-upload"
-              type="file"
-              multiple
-              accept=".pdf"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-          </label>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">PDF files only, up to 10MB each.</p>
-
-        {files.length > 0 && (
-          <ul className="text-sm text-gray-600 mb-4">
-            {files.map((file, index) => (
-              <li key={index}>{file.name}</li>
-            ))}
-          </ul>
-        )}
-
-        <button
-          onClick={handleUpload}
-          disabled={uploading}
-          className={`w-full py-2 px-4 text-white rounded-lg ${
-            uploading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {uploading ? "Uploading..." : "Upload Files"}
-        </button>
-      </div>
-
-      <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Ask Questions</h2>
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Type your question here..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            disabled={!isUploaded}
-            className={`w-full p-2 border ${
-              isUploaded ? "border-gray-300" : "border-gray-300 bg-gray-100 cursor-not-allowed"
-            } rounded-lg text-black`}
-          />
-        </div>
-        <button
-          onClick={handleAskQuestion}
-          disabled={loadingAnswer || !isUploaded}
-          className={`w-full py-2 px-4 text-white rounded-lg ${
-            loadingAnswer || !isUploaded
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-green-600 hover:bg-green-700"
-          }`}
-        >
-          {loadingAnswer ? "Fetching answer..." : "Ask Question"}
-        </button>
-
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Chat History</h3>
-          <div className="space-y-4">
-            {chatHistory.map((entry, index) => (
-              <div
-                key={index}
-                className={`flex ${
-                  entry.type === "question" ? "justify-end" : "justify-start"
-                }`}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex flex-col items-center py-10 px-4">
+      {/* Container with 3 columns at md size and above */}
+      <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Left Panel: Upload Section (spans 1 column) */}
+        <div className="bg-white/70 backdrop-blur-xl shadow-xl rounded-2xl p-6 md:p-8 flex flex-col justify-between md:col-span-1">
+          <div>
+            <div className="flex items-center space-x-3 mb-6">
+              {/* Brand Icon or Logo */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-10 w-10 text-indigo-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+                Doc-<span className="text-indigo-500">Qa-Ck</span>
+              </h1>
+            </div>
+
+            {/* Drag-and-Drop or Click to Select UI */}
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-4 transition hover:border-indigo-400">
+              <label
+                htmlFor="file-upload"
+                className="flex flex-col items-center justify-center cursor-pointer"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-14 w-14 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M7 16v-4m0 0V7m0 5l-2.5 2.5M7 11h10m4 0H7m10 0l-2.5-2.5m0 0L17 7m0 4v4"
+                  />
+                </svg>
+                <span className="mt-3 text-sm text-gray-600 text-center">
+                  Drag & drop your PDF files here,<br />or click to select
+                </span>
+                <input
+                  id="file-upload"
+                  type="file"
+                  multiple
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+            </div>
+
+            <p className="text-xs text-gray-500 mb-4 text-center">
+              PDF files only, up to 10MB each.
+            </p>
+
+            {/* Display Selected Files */}
+            {files.length > 0 && (
+              <ul className="text-sm text-gray-700 mb-4 list-disc list-inside">
+                {files.map((file, index) => (
+                  <li key={index}>{file.name}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className={`mt-4 w-full py-2 px-4 text-white rounded-xl 
+              ${
+                uploading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-indigo-500 hover:bg-indigo-600 transition-colors"
+              }`}
+          >
+            {uploading ? "Uploading..." : "Upload Files"}
+          </button>
+        </div>
+
+        {/* Right Panel: Q&A Section (spans 2 columns) */}
+        <div className="bg-white/70 backdrop-blur-xl shadow-xl rounded-2xl p-6 md:p-8 flex flex-col md:col-span-2">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Ask Questions</h2>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Type your question here..."
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              disabled={!isUploaded}
+              className={`w-full p-3 border border-gray-300 rounded-xl text-black outline-none focus:border-indigo-500 transition ${
+                !isUploaded && "bg-gray-100 cursor-not-allowed"
+              }`}
+            />
+          </div>
+          <button
+            onClick={handleAskQuestion}
+            disabled={loadingAnswer || !isUploaded}
+            className={`w-full py-2 px-4 text-white rounded-xl mb-4
+              ${
+                loadingAnswer || !isUploaded
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700 transition-colors"
+              }`}
+          >
+            {loadingAnswer ? "Fetching answer..." : "Ask Question"}
+          </button>
+
+          {/* Chat History */}
+          <div
+            // Set a max-height for large screens to keep chat scrollable
+            className="flex-1 overflow-y-auto pr-2 max-h-[60vh] md:max-h-[70vh]"
+          >
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-200 pb-2">
+              Chat History
+            </h3>
+            <div className="space-y-4">
+              {chatHistory.map((entry, index) => (
                 <div
-                  className={`p-4 rounded-lg shadow-md ${
-                    entry.type === "question" ? "bg-blue-200 text-black" : "bg-gray-200 text-black"
+                  key={index}
+                  className={`flex w-full ${
+                    entry.type === "question" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {entry.type === "question" && <strong>Q:</strong>}{" "}
-                  {entry.type === "answer" && <strong>A:</strong>}{" "}
-                  {entry.type !== "sources" && entry.text}
-                  {entry.type === "sources" && (
-                    <div className="mt-2">
-                      <h4 className="font-bold text-gray-800">Sources:</h4>
-                      <ol className="mt-2 list-decimal pl-5 text-sm">
-                        {entry.text.map((source, idx) => (
-                          <li key={idx}>{source}</li>
-                        ))}
-                      </ol>
+                  <div
+                    className={`relative p-4 rounded-lg shadow-md max-w-sm ${
+                      entry.type === "question"
+                        ? "bg-indigo-100 text-indigo-900"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {entry.type === "question" && (
+                      <span className="absolute -top-3 right-2 bg-indigo-600 text-white text-xs py-0.5 px-2 rounded-full">
+                        Q
+                      </span>
+                    )}
+                    {entry.type === "answer" && (
+                      <span className="absolute -top-3 left-2 bg-green-600 text-white text-xs py-0.5 px-2 rounded-full">
+                        A
+                      </span>
+                    )}
+                    <div className="whitespace-pre-wrap">
+                      {entry.type !== "sources" && entry.text}
+                      {entry.type === "sources" && (
+                        <div className="mt-2">
+                          <h4 className="font-bold text-gray-800 underline">Sources:</h4>
+                          <ol className="mt-2 list-decimal pl-5 text-sm space-y-1">
+                            {entry.text.map((source, idx) => (
+                              <li key={idx}>{source}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -28,7 +28,6 @@ def initialize_qdrant(vector_size: int):
     """Initialize or reset the Qdrant collection with the specified vector size."""
     try:
         logger.info(f"Initializing Qdrant collection '{COLLECTION_NAME}' with vector size {vector_size}...")
-        
         qdrant_client.recreate_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
@@ -36,6 +35,7 @@ def initialize_qdrant(vector_size: int):
         logger.info(f"✅ Collection '{COLLECTION_NAME}' successfully initialized.")
     except Exception as e:
         logger.error(f"Error initializing Qdrant collection: {e}")
+        raise e
 
 def store_embeddings(embeddings: list, payloads: list):
     """Store embeddings and metadata in Qdrant."""
@@ -59,7 +59,17 @@ def store_embeddings(embeddings: list, payloads: list):
         logger.error(f"Error storing embeddings in Qdrant: {e}")
 
 def search_embeddings(query_vector, top_k: int, threshold: float = 0.7):
-    """Search Qdrant for the most relevant embeddings with a confidence threshold."""
+    """
+    Search Qdrant for the most relevant embeddings with a confidence threshold.
+
+    Args:
+        query_vector (list): Vector representation of the query.
+        top_k (int): Number of top results to fetch.
+        threshold (float): Minimum similarity score to consider a result relevant.
+
+    Returns:
+        list: List of dictionaries containing relevant results and metadata.
+    """
     try:
         if not query_vector:
             logger.warning("⚠️ Query vector is empty. Cannot perform search.")
@@ -67,7 +77,6 @@ def search_embeddings(query_vector, top_k: int, threshold: float = 0.7):
         
         logger.info(f"🔍 Searching Qdrant for top {top_k} matches...")
 
-        # Perform vector search
         results = qdrant_client.search(
             collection_name=COLLECTION_NAME,
             query_vector=query_vector,
@@ -77,20 +86,20 @@ def search_embeddings(query_vector, top_k: int, threshold: float = 0.7):
         if not results:
             logger.warning("⚠️ No matching results found in Qdrant.")
             return []
-        
-        # **Filter results based on threshold score**
+
         filtered_results = [
-            {"score": res.score, "payload": res.payload} for res in results if res.score >= threshold
+            {
+                "score": res.score,
+                "payload": res.payload,
+                "filename": res.payload.get("filename", "Unknown"),
+                "content": res.payload.get("content", "Content not available")
+            }
+            for res in results if res.score >= threshold
         ]
 
-        if not filtered_results:
-            logger.info("🚫 No documents met the relevance threshold.")
-            return []  # Return an empty list if nothing is relevant
-
-        logger.info(f"✅ Found {len(filtered_results)} highly relevant documents.")
+        logger.info(f"✅ Found {len(filtered_results)} highly relevant chunks.")
         return filtered_results
 
     except Exception as e:
         logger.error(f"❌ Error searching embeddings in Qdrant: {e}")
         return []
-

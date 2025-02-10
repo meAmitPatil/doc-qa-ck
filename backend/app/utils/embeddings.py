@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Initialize OpenAI client
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 embedding_model = "text-embedding-ada-002"
@@ -17,6 +18,10 @@ def generate_embeddings(text: str):
             model=embedding_model
         )
 
-        return response.data[0].embedding
+        # Extract embeddings properly
+        embeddings = response.data[0].embedding
+
+        return embeddings
     except Exception as e:
         raise ValueError(f"Failed to generate embeddings: {str(e)}")
+
