@@ -11,13 +11,15 @@ export default function Home() {
   const [loadingAnswer, setLoadingAnswer] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
 
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
   // Clear Qdrant on component mount
   useEffect(() => {
     axios
-      .get("http://127.0.0.1:8000/clear-qdrant")
+      .get(`${backendUrl}/clear-qdrant`)
       .then(() => console.log("🗑️ Cleared Qdrant on refresh"))
       .catch((error) => console.error("❌ Error clearing Qdrant:", error));
-  }, []);
+  }, [backendUrl]);
 
   // Handle file selection
   const handleFileChange = (event) => {
@@ -38,7 +40,7 @@ export default function Home() {
     try {
       setUploading(true);
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/upload",
+        `${backendUrl}/api/upload`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
@@ -71,7 +73,7 @@ export default function Home() {
     try {
       setLoadingAnswer(true);
 
-      const response = await axios.post("http://127.0.0.1:8000/api/qa", { question });
+      const response = await axios.post(`${backendUrl}/api/qa`, { question });
       console.log("Backend Response:", response.data);
 
       const answer = response.data.answer;
