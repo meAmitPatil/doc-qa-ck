@@ -1,16 +1,31 @@
 import os
 import openai
 from dotenv import load_dotenv
+from phoenix.otel import register
+from openinference.instrumentation.openai import OpenAIInstrumentor
 
+# Load environment variables
 load_dotenv()
+
+# Set up Phoenix API key
+PHOENIX_API_KEY = os.getenv("PHOENIX_API_KEY")
+os.environ["PHOENIX_CLIENT_HEADERS"] = f"api_key={PHOENIX_API_KEY}"
+os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "https://app.phoenix.arize.com"
+
+# Register Phoenix tracer
+tracer_provider = register(project_name="doc-qa-ck")
+
+# Instrument OpenAI calls
+OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
 # Load OpenAI API key
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 def generate_answer(question, context):
     """
     Generate an answer using OpenAI GPT-3.5/4 model based on the given context.
+    Traced using Phoenix for observability.
     """
     try:
         prompt = (
@@ -39,6 +54,7 @@ def generate_answer(question, context):
 def classify_query(question, context):
     """
     Classify a query as either "General Knowledge" or "Context-Specific."
+    Traced using Phoenix for observability.
     """
     try:
         prompt = (
