@@ -1,17 +1,36 @@
-# Backend Dockerfile
-FROM python:3.9-slim
+# Use official Python slim image for a lightweight container
+FROM python:3.9-slim AS builder
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install system dependencies required for some Python packages
+RUN apt-get update && apt-get install -y \
+    gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy the entire backend application
+# Copy requirements file and install dependencies in a virtual environment
+COPY requirements.txt .
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# ---- Production Stage ----
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy the virtual environment from the builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application files
 COPY . .
 
-# Expose the backend port
+# Set environment variables
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Expose FastAPI port
 EXPOSE 8000
 
-# Start FastAPI
+# Start FastAPI with Uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
