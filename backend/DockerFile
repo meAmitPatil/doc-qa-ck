@@ -1,5 +1,5 @@
 # Use official Python slim image for a lightweight container
-FROM python:3.9-slim AS builder
+FROM python:3.11-slim AS builder
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ---- Production Stage ----
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
